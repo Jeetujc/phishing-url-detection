@@ -1,0 +1,13 @@
+beautifulsoup4
+Flask
+googlesearch_python
+numpy
+pandas
+python_dateutil
+requests
+scikit_learn
+whois
+gunicorn
+matplotlib
+seaborn
+xgboost
