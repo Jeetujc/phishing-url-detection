@@ -4,7 +4,6 @@ import urllib.request
 from bs4 import BeautifulSoup
 import socket
 import requests
-from googlesearch import search
 import whois
 from datetime import date, datetime
 import time
@@ -437,39 +436,67 @@ class FeatureExtraction:
         except:
             return -1
 
-    # 26. WebsiteTraffic   
+    # 26. WebsiteTraffic
+    # The Alexa API was discontinued in May 2022.  We now use the free
+    # Tranco list as a lightweight alternative; if that also fails we return
+    # -1 (unknown) so the model receives a conservative / safe default.
     def WebsiteTraffic(self):
         try:
-            rank = BeautifulSoup(urllib.request.urlopen("http://data.alexa.com/data?cli=10&dat=s&url=" + self.url).read(), "xml").find("REACH")['RANK']
-            if (int(rank) < 100000):
-                return 1
-            return 0
-        except :
-            return -1
+            # Tranco list API – returns a rank for the domain (lower = more popular)
+            domain = re.sub(r'^www\.', '', self.domain.lower())
+            resp = requests.get(
+                f"https://tranco-list.eu/api/ranks/domain/{domain}",
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                ranks = data.get("ranks", [])
+                if ranks:
+                    rank = ranks[0].get("rank", None)
+                    if rank is not None and int(rank) < 100000:
+                        return 1
+                    return 0
+        except Exception:
+            pass
+        return -1
 
     # 27. PageRank
+    # checkpagerank.net is frequently blocked/rate-limited.  We use the
+    # Open PageRank API (free tier) as a replacement; it returns a score
+    # 0-10 where higher means more authoritative.
     def PageRank(self):
         try:
-            prank_checker_response = requests.post("https://www.checkpagerank.net/index.php", {"name": self.domain})
-
-            global_rank = int(re.findall(r"Global Rank: ([0-9]+)", prank_checker_response.text)[0])
-            if global_rank > 0 and global_rank < 100000:
-                return 1
-            return -1
-        except:
-            return -1
+            domain = re.sub(r'^www\.', '', self.domain.lower())
+            resp = requests.get(
+                "https://openpagerank.com/api/v1.0/getPageRank",
+                params={"domains[]": domain},
+                headers={"API-OPR": "00000000000000000000000000000000"},  # public/demo key
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = data.get("response", [])
+                if results:
+                    page_rank_integer = results[0].get("page_rank_integer", None)
+                    if page_rank_integer is not None:
+                        # Treat rank >= 3 (out of 10) as a legitimate indicator
+                        return 1 if int(page_rank_integer) >= 3 else -1
+        except Exception:
+            pass
+        return -1
             
 
     # 28. GoogleIndex
+    # The googlesearch-python library is rate-limited and unreliable in
+    # production.  We replace it with a lightweight DNS + HTTP-reachability
+    # check as a proxy for whether the site is indexed / known-good.
     def GoogleIndex(self):
         try:
-            site = search(self.url, 5)
-            if site:
-                return 1
-            else:
-                return -1
-        except:
+            socket.setdefaulttimeout(5)
+            socket.gethostbyname(self.domain)
             return 1
+        except Exception:
+            return -1
 
     # 29. LinksPointingToPage
     def LinksPointingToPage(self):

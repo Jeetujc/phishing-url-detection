@@ -1,6 +1,5 @@
 beautifulsoup4
 Flask
-googlesearch_python
 numpy
 pandas
 python_dateutil
@@ -11,3 +10,7 @@ gunicorn
 matplotlib
 seaborn
 xgboost
+lightgbm
+ipykernel
+notebook
+lxml
